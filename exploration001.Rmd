@@ -1,0 +1,110 @@
+---
+title: "Explorating the tHPI"
+author: "Bijan Ranjbar-Sahraei"
+date: "October 28, 2015"
+output: html_document
+---
+
+# Initialization
+```{r message=FALSE}
+rm(list=ls())
+library("reshape2")
+# library("doBy")
+library("ggplot2")
+# library("gplots")
+library("NMF")  # for heatmaps
+library("ggmap")  # for map plot 
+```
+## Importing Data
+Let's import the newest tHPI data.
+
+```{r}
+csv.data <- read.csv("/Users/bian/sandbox/3gogo/thpi_us.csv")
+head(csv.data)
+
+```
+
+# Preprocessing
+
+Let's now reshape our input data to a more friendly format.
+```{r}
+data <- melt(csv.data[,c(1:11)], id="city")
+data <- setNames(data[c("city", "variable", "value")], c("city", "month", "price"))
+head(data)
+
+
+```
+
+We remove the $-sign and turn prices into numeric values.
+```{r}
+data$price <- as.numeric(gsub("[^[:digit:]]",'',data$price))
+head(data)
+summary(data)
+```
+
+
+Let's convert months to Date format
+```{r}
+data$date <-as.Date(paste("01",data$month,"15",sep=""),"%d%B%Y") 
+```
+
+
+# EDA
+Let's illustrate the trends
+```{r}
+ggplot(data, aes(x=price)) + geom_density()
+ggplot(data, aes(x=price,color=month)) + geom_density()
+ggplot(data, aes(x=price,color=city)) + geom_density()
+
+ggplot(data, aes(x=month,y=price)) + geom_boxplot() + theme(axis.text.x=element_text(angle=90,hjust=1,vjust=0.5))
+ggplot(data, aes(x=city,y=price)) + geom_boxplot() + theme(axis.text.x=element_text(angle=90,hjust=1,vjust=0.5))
+
+ggplot(data, aes(x=date,y=price)) + geom_point() + geom_smooth()
+ggplot(data, aes(x=date,y=price,color=city)) + geom_point() + geom_smooth()
+```
+
+## heatmap
+For ploting the heatmap, we have to use the original *csv.data* which has a matrix format.
+
+```{r}
+nba <- csv.data
+nba <- nba[,2:11]
+
+nba <- sapply(nba,function(x) {as.numeric(gsub("[^[:digit:]]",'',x))})
+row.names(nba) <- csv.data$city
+
+nba_matrix <- data.matrix(nba)
+dev.off()
+nba_heatmap <- heatmap(nba_matrix, Rowv=NA, Colv=NA, col = heat.colors(256), scale="row", margins=c(6,10))
+```
+
+Let's do some heatmaps. First the original one, then a normalized one based on cities and last a normalized one by months.
+```{r}
+aheatmap(nba_matrix, Rowv=FALSE, Colv=FALSE, fontsize=5, cexRow=2, cexCol=2)
+
+# normalized based on cities
+aheatmap(nba_matrix, color = "-RdBu:50", scale = "column", Rowv=FALSE, Colv=FALSE,fontsize=5, cexRow=2, cexCol=2)
+
+# normalized based on months
+aheatmap(nba_matrix, color = "-RdBu:50", scale = "row", Rowv=FALSE, Colv=FALSE,fontsize=3, cexRow=3, cexCol=2)
+```
+
+
+# Plotting on a map
+```{r}
+# creating a sample data.frame with your lat/lon points
+lon <- csv.data$Longitude
+lat <- csv.data$Latitude
+df <- as.data.frame(cbind(lon,lat))
+
+# getting the map
+mapgilbert <- get_map(location = c(lon = mean(df$lon), lat = mean(df$lat)), zoom = 4,
+                      maptype = "terrain", scale = 2)
+
+# plotting the map with some points on it
+ggmap(mapgilbert) +
+  geom_point(data = df, aes(x = lon, y = lat, fill = "red", alpha = 0.8), size = 5, shape = 21) +
+  guides(fill=FALSE, alpha=FALSE, size=FALSE)
+
+```
+
