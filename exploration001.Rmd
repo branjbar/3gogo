@@ -19,7 +19,7 @@ library("ggmap")  # for map plot
 Let's import the newest tHPI data.
 
 ```{r}
-csv.data <- read.csv("/Users/bian/sandbox/3gogo/thpi_us.csv")
+csv.data <- read.csv("/Users/bian/sandbox/thpi_us.csv")
 head(csv.data)
 
 ```
@@ -103,7 +103,7 @@ mapgilbert <- get_map(location = c(lon = mean(df$lon), lat = mean(df$lat)), zoom
 
 # plotting the map with some points on it
 ggmap(mapgilbert) +
-  geom_point(data = df, aes(x = lon, y = lat, fill = "red", alpha = 0.8), size = 5, shape = 21) +
+  geom_point(data = csv, aes(x = lon, y = lat, fill = "red", alpha = 0.8), size = 5, shape = 21) +
   guides(fill=FALSE, alpha=FALSE, size=FALSE)
 
 ```
