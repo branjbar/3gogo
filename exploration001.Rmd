@@ -1,34 +1,39 @@
 ---
-title: "Explorating the tHPI"
+title: "Exploring a Price Index"
 author: "Bijan Ranjbar-Sahraei"
 date: "October 28, 2015"
-output: html_document
+output:
+  html_document:
+    theme: united
+    toc: yes
+  pdf_document:
+    toc: yes
 ---
 
-# Initialization
+# Data Processing
 ```{r message=FALSE}
 rm(list=ls())
 library("reshape2")
-# library("doBy")
 library("ggplot2")
-# library("gplots")
 library("NMF")  # for heatmaps
 library("ggmap")  # for map plot 
+library("gridExtra")
+
+#library(plyr)  # to manipulate tables
 ```
 ## Importing Data
 Let's import the newest tHPI data.
 
 ```{r}
-csv.data <- read.csv("/Users/bian/sandbox/thpi_us.csv")
-head(csv.data)
+data.csv <- read.csv("/Users/bian/sandbox/thpi_us.csv")
+data.tabular <- data.csv
+head(data.tabular)
 
 ```
 
-# Preprocessing
-
 Let's now reshape our input data to a more friendly format.
 ```{r}
-data <- melt(csv.data[,c(1:11)], id="city")
+data <- melt(data.tabular[,c(1:11)], id="city")
 data <- setNames(data[c("city", "variable", "value")], c("city", "month", "price"))
 head(data)
 
@@ -60,18 +65,18 @@ ggplot(data, aes(x=month,y=price)) + geom_boxplot() + theme(axis.text.x=element_
 ggplot(data, aes(x=city,y=price)) + geom_boxplot() + theme(axis.text.x=element_text(angle=90,hjust=1,vjust=0.5))
 
 ggplot(data, aes(x=date,y=price)) + geom_point() + geom_smooth()
-ggplot(data, aes(x=date,y=price,color=city)) + geom_point() + geom_smooth()
+ggplot(data, aes(x=date,y=price,color=city)) + geom_point() + geom_smooth(se=FALSE)
 ```
 
 ## heatmap
-For ploting the heatmap, we have to use the original *csv.data* which has a matrix format.
+For ploting the heatmap, we have to use the original *data.tabular* which has a matrix format.
 
 ```{r}
-nba <- csv.data
+nba <- data.tabular
 nba <- nba[,2:11]
 
 nba <- sapply(nba,function(x) {as.numeric(gsub("[^[:digit:]]",'',x))})
-row.names(nba) <- csv.data$city
+row.names(nba) <- data.tabular$city
 
 nba_matrix <- data.matrix(nba)
 dev.off()
@@ -90,21 +95,262 @@ aheatmap(nba_matrix, color = "-RdBu:50", scale = "row", Rowv=FALSE, Colv=FALSE,f
 ```
 
 
-# Plotting on a map
+## Using Latitudal Information
 ```{r}
 # creating a sample data.frame with your lat/lon points
-lon <- csv.data$Longitude
-lat <- csv.data$Latitude
+lon <- data.tabular$lon
+lat <- data.tabular$lat
 df <- as.data.frame(cbind(lon,lat))
 
 # getting the map
 mapgilbert <- get_map(location = c(lon = mean(df$lon), lat = mean(df$lat)), zoom = 4,
-                      maptype = "terrain", scale = 2)
+                      maptype = "terrain", scale = 1)
 
 # plotting the map with some points on it
+data.tabular$sept.price <- as.numeric(gsub("[^[:digit:]]",'',data.tabular$September))
+data.tabular$oct.price <- as.numeric(gsub("[^[:digit:]]",'',data.tabular$October))
+data.tabular$aug.price <- as.numeric(gsub("[^[:digit:]]",'',data.tabular$August))
+
+ggmap(mapgilbert) + geom_point(data = data.tabular, aes(x = lon, y = lat, fill = oct.price,label=city), size = 5, shape = 21)
+
 ggmap(mapgilbert) +
-  geom_point(data = csv, aes(x = lon, y = lat, fill = "red", alpha = 0.8), size = 5, shape = 21) +
-  guides(fill=FALSE, alpha=FALSE, size=FALSE)
+  geom_point(data = data.tabular, aes(x = lon, y = lat, fill = sept.price),size = 5, shape = 21) + 
+  geom_point(data = data.tabular, aes(x = lon, y = lat+.7, fill = oct.price),size = 5, shape = 22) + 
+  geom_point(data = data.tabular, aes(x = lon+.7, y = lat, fill = aug.price),size = 5, shape = 24) + 
+#  scale_fill_gradient2(low = "#0000FF", high ="#FF0000", midpoint = mean(data.tabular$oct.price))
+  scale_fill_gradient2(low = "#0000FF", high ="#FF0000", midpoint = 250)
+
+
+ggplot(data = data.tabular, aes(x = lon, y = lat,label=city)) + 
+  geom_point(aes(fill = oct.price),size = 5, shape = 21) + 
+  geom_text(aes(label=city),hjust=0, vjust=1.5) + 
+  scale_fill_gradient2(low = "#0000FF", high ="#FF0000", midpoint = 250)
 
 ```
 
+## Categorizing the cities
+We can't continue with a bunch of numbers. Let's extract specific statistics which we can use for further studies.
+WE categorize cities based on their price average, and their price trend and later will add information about their climate, population, number of hotels, etc.
+
+```{r}
+# getting the price statistics
+
+data.summary = data.frame(city=unique(data$city))  # a data frame for summary of data
+
+d <- aggregate(data$price, by=list(city=data$city), FUN=mean)  # temporary mean 
+data.summary$price.mean <- sapply(data.summary$city,FUN=function(x){d[d$city==x,]$x})
+
+d <- aggregate(data$price, by=list(city=data$city), FUN=sd)  # temporary sd
+data.summary$price.sd <- sapply(data.summary$city,FUN=function(x){d[d$city==x,]$x})
+
+d <- aggregate(data$price, by=list(city=data$city), FUN=range)  # temporary range
+data.summary$price.range <- sapply(data.summary$city,FUN=function(x){d[d$city==x,]$x[2] - d[d$city==x,]$x[1]})
+head(data.summary)
+
+# assinging price classes 
+data.summary$price.mean.class <- cut(data.summary$price.mean,breaks=3)
+data.summary$price.sd.class <- cut(data.summary$price.sd,breaks=2)
+data.summary$price.range.class <- cut(data.summary$price.range,breaks=2)
+head(data.summary)
+
+# let's check the price distributions
+ggplot(data=data.summary, aes(x=price.mean.class,y=price.mean)) + geom_boxplot()
+ggplot(data=data.summary, aes(x=price.sd.class,y=price.sd)) + geom_boxplot()
+ggplot(data=data.summary, aes(x=price.range.class,y=price.range)) + geom_boxplot()
+
+```
+
+Now, we bring the GPS data to *data.summary*.
+```{r}
+data.summary$lat <- sapply(data.summary$city,function(x) {as.numeric(data.tabular[data.tabular$city == x,]$lat[1])})
+data.summary$lon <- sapply(data.summary$city,function(x) {as.numeric(data.tabular[data.tabular$city == x,]$lon[1])})
+ggplot(data=data.summary, aes(x=lon,y=lat,color=price.mean.class)) + geom_point(aes(shape=price.sd.class),size=4) + geom_text(aes(label=city),hjust=0, vjust=0) 
+```
+
+From the results of last plot we understand that not the low price cities don't have much variance in their price. Let's check it here
+
+
+```{r}
+data.summary$price.mean
+```
+
+```{r}
+data.summary$class.price[data.summary$price.mean <= 210] <- "cheap" 
+data.summary$class.price[data.summary$price.mean <= 284 & data.summary$price.mean > 210] <- "moderate" 
+data.summary$class.price[data.summary$price.mean > 284] <- "expensive" 
+
+#data.summary$class.stability[data.summary$price.sd <= 44.5] <- "stable" 
+#data.summary$class.stability[data.summary$price.sd > 44.5] <- "unstable" 
+
+data.summary$class.stability[data.summary$price.range <= 100] <- "stable" 
+data.summary$class.stability[data.summary$price.range > 100] <- "unstable" 
+
+ggplot(subset(data,city %in% data.summary$city[data.summary$class.price == "cheap"]), aes(x=date,y=price,color=city)) +
+  geom_point() + geom_smooth(se=FALSE) + 
+  ggtitle("Cheap Cities") + 
+  scale_y_continuous(limits = c(90,500))
+
+ggplot(subset(data,city %in% data.summary$city[data.summary$class.price == "moderate"]), aes(x=date,y=price,color=city)) + 
+  geom_point() + geom_smooth(se=FALSE) + 
+  ggtitle("Moderate Cities") + 
+  scale_y_continuous(limits = c(90,500))
+
+ggplot(subset(data,city %in% data.summary$city[data.summary$class.price == "expensive"]), aes(x=date,y=price,color=city)) + 
+  geom_point() + geom_smooth(se=FALSE) + 
+  ggtitle("Expensive Cities") + 
+  scale_y_continuous(limits = c(90,500))
+
+```
+```{r}
+ggplot(subset(data,city %in% data.summary$city[data.summary$class.stability == "stable"]), aes(x=date,y=price,color=city)) + 
+  geom_point() + geom_smooth(se=FALSE) + 
+  ggtitle("Stable Cities") + 
+  scale_y_continuous(limits = c(90,500))
+
+ggplot(subset(data,city %in% data.summary$city[data.summary$class.stability == "unstable"]), aes(x=date,y=price,color=city)) + 
+  geom_point() + geom_smooth(se=FALSE) + 
+  ggtitle("Unstable Cities") + 
+  scale_y_continuous(limits = c(90,500))
+
+
+```
+
+Using the latter diagrm we make the following new categories.
+
+```{r}
+data$trend[data$city %in% c("Phoenix","Miami")] <- "updownup"
+data$trend[data$city %in% c("Boston","Meanneapolis","Chicago","New York")] <- "upupdownup"
+data$trend[data$city %in% c("San Francisco")] <- "upupup"
+data$trend[data$city %in% c("Seattle")] <- "upupupdown"
+
+p1 <- ggplot(subset(data, trend=="updownup"), aes(x=date,y=price,color=city)) + 
+  geom_point() + 
+  geom_smooth(se=FALSE,aes(color=city)) + 
+  ggtitle("three different trends") + 
+  scale_y_continuous(limits = c(90,500))
+p2 <- ggplot(subset(data, trend=="upupdownup"), aes(x=date,y=price,color=city)) + 
+  geom_point() + 
+  geom_smooth(se=FALSE,aes(color=city)) + 
+  ggtitle("three different trends") + 
+  scale_y_continuous(limits = c(90,500))
+p3 <- ggplot(subset(data, trend=="upupup"), aes(x=date,y=price,color=city)) + 
+  geom_point() + 
+  geom_smooth(se=FALSE,aes(color=city)) + 
+  ggtitle("three different trends") + 
+  scale_y_continuous(limits = c(90,500))
+p4 <- ggplot(subset(data, trend=="upupupdown"), aes(x=date,y=price,color=city)) + 
+  geom_point() + 
+  geom_smooth(se=FALSE,aes(color=city)) + 
+  ggtitle("three different trends") + 
+  scale_y_continuous(limits = c(90,500))
+
+grid.arrange(p1,p2,p3,p4)
+
+```
+
+# Modeling
+It seems that every city is following a semi-sinusoidal trend (Probably it's following the weather conditions). Let's find the picks! 
+```{r, echo = F, message = F}
+get.predictors <- function(t) {
+  return(data.frame(t=t,
+           sin = sin(pi/6*t), # 12 month period
+           cos = cos(pi/6*t),
+           sin2 = sin(pi/3*t), # 6 month period
+           cos2 = cos(pi/3*t)
+           )
+         )
+}
+get.predictions <- function(price.trend,time.end) {
+  lmfit <- lm(y ~ sin+cos+sin2+cos2,data=price.trend)
+  prediction.time <- 1:time.end
+  return(price.prediction <- data.frame(t=prediction.time,y=predict(lmfit,get.predictors(prediction.time))))
+}
+```
+## Estimating October Prices (Test)
+```{r}
+p <- lapply(data.summary$city,function(the_city) {
+  price.train = get.predictors(1:9)
+  price.train$y = data$price[data$city==the_city][1:9]
+  price.trend = get.predictors(1:10)
+  price.trend$y = data$price[data$city==the_city][1:10]
+  
+  
+  price.prediction <- get.predictions(price.train,10)
+  ggplot(price.trend, aes(x=t,y=y)) + 
+      geom_point() + 
+      geom_point(data=price.prediction, aes(x=t,y=y)) + 
+      geom_line(data=price.prediction, aes(x=t,y=y),color="red") + 
+      geom_line() +
+      ggtitle(the_city)
+      
+})
+```
+### Good Predictions
+For some of the cities we have good predictions for October
+```{r}
+do.call(grid.arrange, c(p[c(3,4,19,21,22,17)], list(ncol=3)))
+```
+
+### Bad Predictions
+For some other cities, the predictions don't work that well. This can be because of unknwon disturbances that our model doesn't know.
+```{r}
+do.call(grid.arrange, c(p[c(1,12,20,23)], list(ncol=2)))
+```
+## Calculating the Estimation Error [todo]
+[TODO]
+
+# Estimating November and December Prices (To be Verified)
+```{r}
+
+# plotting the predictions
+p <- lapply(data.summary$city,function(the_city) {
+  price.train = get.predictors(1:10)
+  price.train$y = data$price[data$city==the_city][1:10]
+  price.trend = get.predictors(1:10)
+  price.trend$y = data$price[data$city==the_city][1:10]
+  price.prediction <- get.predictions(price.train,12)
+  
+  ggplot(price.trend, aes(x=t,y=y)) + 
+      geom_point() + 
+      geom_point(data=price.prediction, aes(x=t,y=y)) + 
+      geom_line(data=price.prediction, aes(x=t,y=y),color="red") + 
+      geom_line() +
+      ggtitle(the_city)
+      
+})
+do.call(grid.arrange, c(p[c(1:9)], list(ncol=3)))
+do.call(grid.arrange, c(p[c(10:18)], list(ncol=3)))
+do.call(grid.arrange, c(p[c(19:25)], list(ncol=3)))
+```
+
+Filling in the prices in the matrix
+```{r}
+data.to.be.verified <- data.csv
+for (the_city in data.summary$city) {
+  price.train = get.predictors(1:10)
+  price.train$y = data$price[data$city==the_city][1:10]
+  price.prediction <- get.predictions(price.train,12)
+  data.to.be.verified$November[data.tabular$city==the_city] <- round(price.prediction$y[11])
+  data.to.be.verified$December[data.tabular$city==the_city] <- round(price.prediction$y[12])
+}
+
+data.to.be.verified[c(1,7:11,14,15)]
+
+```
+
+```
+
+# Future Perspective
+Time is tight! If I find more time, I'll do the following.
+
+1. Using Similar tHPI Datasets
+  - The *US tHPI data archive* is available for 2012, 2013 and 2014. I can use it for getting further insights and training a better model.
+  - I can use similar datasets for Europe and Canada  as well.
+2. Collecting new Data
+  - According to this report, hotel prices vary based on seasons. Therefore, collecting the temprature and raining trends can help in predicting the prices. Different starting time of seasons in different states can be the reason of different price patterns.
+  - For each city, data on population of cities, number of tourists and number of hotel rooms exists. Such data can explain why in some cities prices are very *unstable* and for other cities they don't chage much!
+3. Feedback loop - We should be careful as prices are determined in a negotiating process. By making predictions of future prices, and influencing this negotiation pattern we might witness new patterns.
+
+
+  
+  
