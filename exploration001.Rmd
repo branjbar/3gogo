@@ -14,28 +14,28 @@ This is my first try to analyse a tHPI dataset. Therefore, some of the decisions
 
 # Data Processing
 ```{r echo=FALSE, message=FALSE}
-rm(list=ls())
-library("reshape2")
-library("ggplot2")
+rm(list=ls())  # to remove all variables from workspace 
+library("reshape2")  # to reshape matrices to long lists
+library("ggplot2")  # for plotting
 library("NMF")  # for heatmaps
 library("ggmap")  # for map plot 
-library("gridExtra")
+library("gridExtra")  # for having multiple subplots in a grid
 ```
 
 I start by importing a recent tHPI which shows the average price in USD for a standard double room, based on 25 of the most popular US cities. I also add the Latitude and Longitude of these 25 cities, which will be used for fancier visualizations. Here is the tHPI for top 6 cities of US.
 
 ```{r echo=FALSE}
 data.csv <- read.csv("/Users/bian/sandbox/thpi_us.csv")
-data.tabular <- data.csv
+data.tabular <- data.csv  # form now on I work with data.tabular and keep data.csv as the original version
 head(data.tabular)
 
 ```
 
 I reshape the spreadsheet data into a four column data frame, with city, month, price, and date in *first*, *second*, *third* and *forth* columns, respectively. The first six rows of the new data frame are as following.
 ```{r echo=FALSE}
-data <- melt(data.tabular[,c(1:11)], id="city")
-data <- setNames(data[c("city", "variable", "value")], c("city", "month", "price"))
-data$date <- as.Date(paste("01",data$month,"15",sep=""),"%d%B%Y") 
+data <- melt(data.tabular[,c(1:11)], id="city") # melts the matrix to a long list
+data <- setNames(data[c("city", "variable", "value")], c("city", "month", "price"))  # changing the column names after melting them
+data$date <- as.Date(paste("01",data$month,"15",sep=""),"%d%B%Y")   # converting the month names to date
 head(data)
 ```
 A few minor data processing tasks will be done later during the EDA and modeling phases. Next, I'll conduct *Exploratory Data Analysis (EDA)* for getting more insights into the dataset.
@@ -44,9 +44,9 @@ A few minor data processing tasks will be done later during the EDA and modeling
 The following three plots, show the density of hotel prices.
 
 ```{r echo=FALSE}
-ggplot(data, aes(x=price)) + geom_density()
-ggplot(data, aes(x=price,color=month)) + geom_density()
-ggplot(data, aes(x=price,color=city)) + geom_density()
+ggplot(data, aes(x=price)) + geom_density()  # density of prices
+ggplot(data, aes(x=price,color=month)) + geom_density()  # density of prices per month
+ggplot(data, aes(x=price,color=city)) + geom_density()  # density of prices per city
 ```
 
 According to the first plot, most of the hotel prices are around $150, however this price can go up to around $450. 
@@ -54,7 +54,10 @@ Based on the second plot, in January, most of the cities have the $150 price whi
 The third plot, decomposes the price distribution of different cities. Which is hard to analyse as it is. Therefore, I continue with the following two boxplots.
 
 ```{r echo=FALSE}
+# a boxplot of prices per month
 ggplot(data, aes(x=month,y=price)) + geom_boxplot() + theme(axis.text.x=element_text(angle=90,hjust=1,vjust=0.5))
+
+# a boxplot of prices per city (too many cities so it runs out of borders)
 ggplot(data, aes(x=city,y=price)) + geom_boxplot() + theme(axis.text.x=element_text(angle=90,hjust=1,vjust=0.5))
 
 #ggplot(data, aes(x=date,y=price)) + geom_point() + geom_smooth()
@@ -68,11 +71,11 @@ The latter plot, immediately shows different type of cities. *Boston* and *New Y
 The following heatmap illustrates how prices change across months and cities. 
 
 ```{r echo=FALSE}
-nba <- data.tabular
+nba <- data.tabular  # to make the heatmap I need a matrix of prices per month and city
 nba <- nba[,2:11]
 
-nba <- sapply(nba,function(x) {as.numeric(gsub("[^[:digit:]]",'',x))})
-row.names(nba) <- data.tabular$city
+nba <- sapply(nba,function(x) {as.numeric(gsub("[^[:digit:]]",'',x))})  # to extract prices if any $-sign or something like that exists in it
+row.names(nba) <- data.tabular$city  # bringing back the row numbers to nba
 
 nba_matrix <- data.matrix(nba)
 aheatmap(nba_matrix, Rowv=FALSE, Colv=FALSE, fontsize=5, cexRow=2, cexCol=2)
@@ -88,12 +91,12 @@ The lower right corner of the above heatmap, roughly, captures the cities and mo
 
 
 ```{r echo=FALSE, message=FALSE, warning=FALSE}
-# creating a sample data.frame with your lat/lon points
+# creating a sample data.frame with lat/lon points
 lon <- data.tabular$lon
 lat <- data.tabular$lat
 df <- as.data.frame(cbind(lon,lat))
 
-# getting the map
+# getting the map from google!
 mapgilbert <- get_map(location = c(lon = mean(df$lon), lat = mean(df$lat)), zoom = 4, maptype = "terrain", scale = 1)
 
 # plotting the map with some points on it
@@ -120,7 +123,7 @@ data.tabular$aug.price <- as.numeric(gsub("[^[:digit:]]",'',data.tabular$August)
 Here I try to make categories for cities. First, I categorize each city as "Cheap Cities", "Moderate Cities" and "Expensive Cities". Second, I categorize them as "Stable Cities" and "Unstable Cities". Before this categorization, let me extract the mean, standard deviation and range of prices from January to October, for each city. Following comes these statistics for the top 6 cities of US. 
 
 ```{r echo=FALSE}
-# getting the price statistics
+# getting price statistics
 
 data.summary = data.frame(city=unique(data$city))  # a data frame for summary of data
 
@@ -147,6 +150,7 @@ head(data.summary)
 ```
 
 ```{r echo=FALSE}
+# plotting three point for each city based on prices in different months
 data.summary$lat <- sapply(data.summary$city,function(x) {as.numeric(data.tabular[data.tabular$city == x,]$lat[1])})
 data.summary$lon <- sapply(data.summary$city,function(x) {as.numeric(data.tabular[data.tabular$city == x,]$lon[1])})
 #ggplot(data=data.summary, aes(x=lon,y=lat,color=price.mean.class)) + geom_point(aes(shape=price.sd.class),size=4) + geom_text(aes(label=city),hjust=0, vjust=0) 
@@ -155,6 +159,7 @@ data.summary$lon <- sapply(data.summary$city,function(x) {as.numeric(data.tabula
 The change of prices in each category are shown in following plots.
 
 ```{r echo=FALSE, warning=FALSE, message=FALSE}
+
 data.summary$class.price[data.summary$price.mean <= 210] <- "cheap" 
 data.summary$class.price[data.summary$price.mean <= 284 & data.summary$price.mean > 210] <- "moderate" 
 data.summary$class.price[data.summary$price.mean > 284] <- "expensive" 
@@ -164,6 +169,8 @@ data.summary$class.price[data.summary$price.mean > 284] <- "expensive"
 
 data.summary$class.stability[data.summary$price.range <= 100] <- "stable" 
 data.summary$class.stability[data.summary$price.range > 100] <- "unstable" 
+
+# plotting cheap, moderate and expensive cities
 
 ggplot(subset(data,city %in% data.summary$city[data.summary$class.price == "cheap"]), aes(x=date,y=price,color=city)) +
   geom_point() + geom_smooth(se=FALSE) + 
@@ -179,6 +186,8 @@ ggplot(subset(data,city %in% data.summary$city[data.summary$class.price == "expe
   geom_point() + geom_smooth(se=FALSE) + 
   ggtitle("Expensive Cities") + 
   scale_y_continuous(limits = c(90,500))
+
+# plotting stable and unstable cities
 
 ggplot(subset(data,city %in% data.summary$city[data.summary$class.stability == "stable"]), aes(x=date,y=price,color=city)) + 
   geom_point() + geom_smooth(se=FALSE) + 
@@ -196,11 +205,13 @@ ggplot(subset(data,city %in% data.summary$city[data.summary$class.stability == "
 Using all the above plots, my intuition is that fluctuation of prices are following certain patterns. I illustrate some patterns, namely *up-down-up, up-up-down-up, up-up-up-up, up-up-up-down* in the following four subplots. 
 
 ```{r echo=FALSE, warning=FALSE, message=FALSE}
+# making categories for prices.
 data$trend[data$city %in% c("Phoenix","Miami")] <- "updownup"
 data$trend[data$city %in% c("Boston","Meanneapolis","Chicago","New York")] <- "upupdownup"
 data$trend[data$city %in% c("San Francisco")] <- "upupup"
 data$trend[data$city %in% c("Seattle")] <- "upupupdown"
 
+# plotting each category
 p1 <- ggplot(subset(data, trend=="updownup"), aes(x=date,y=price,color=city)) + 
   geom_point() + 
   geom_smooth(se=FALSE,aes(color=city)) + 
@@ -233,6 +244,7 @@ Based on my observations in above plots, and considering that the traveling patt
 It seems that every city is following a periodic trend. For this, I define these four predictors: $sin(\frac{\pi t}{6}),cos(\frac{\pi t}{6}),sin(\frac{\pi t}{3}),cos(\frac{\pi t}{3})$ where $t$ is the number of month ranging from 1 to 12 for January to December. Then, I use a linear model to predict the price of each month. See following two R functions.
 
 ```{r message = F}
+# generating predictors for linear models
 get.predictors <- function(t) {
   return(data.frame(t=t,
            sin = sin(pi/6*t), # 12 month period
@@ -242,6 +254,8 @@ get.predictors <- function(t) {
            )
          )
 }
+
+# predicting prices based on the existing prices
 get.predictions <- function(price.trend,time.end) {
   lmfit <- lm(y ~ sin+cos+sin2+cos2,data=price.trend)
   prediction.time <- 1:time.end
@@ -250,6 +264,7 @@ get.predictions <- function(price.trend,time.end) {
 ```
 
 ```{r echo=FALSE}
+# a function to get coefficients of the model
 get.coeffs <- function(price.trend,time.end) {
   lmfit <- lm(y ~ sin+cos+sin2+cos2,data=price.trend)
   return(lmfit$coefficients)
@@ -263,14 +278,17 @@ To test this model I train one model for each city, based on the prices from Jan
 After visually testing the predicted prices of October, I realized that for some of the cities the predictions are very promissing, while for some other cities predictions fail.
 
 ```{r echo=FALSE}
+
+# for every city plot the prediction in put them in p
 p <- lapply(data.summary$city,function(the_city) {
-  price.train = get.predictors(1:9)
-  price.train$y = data$price[data$city==the_city][1:9]
-  price.trend = get.predictors(1:10)
-  price.trend$y = data$price[data$city==the_city][1:10]
+  price.train = get.predictors(1:9)  # getting the predictors
+  price.train$y = data$price[data$city==the_city][1:9]  # getting the ouput for training data
+  price.trend = get.predictors(1:10) 
+  price.trend$y = data$price[data$city==the_city][1:10]  
   
   
   price.prediction <- get.predictions(price.train,10)
+  
   ggplot(price.trend, aes(x=t,y=y)) + 
       geom_point() + 
       geom_point(data=price.prediction, aes(x=t,y=y),color="red") + 
@@ -284,7 +302,7 @@ p <- lapply(data.summary$city,function(the_city) {
 Some good predictions of October price are shown in following plots (the black dots are real values and the red dots and lines are my predictions).
 
 ```{r echo=FALSE}
-do.call(grid.arrange, c(p[c(3,19,22)], list(ncol=3)))
+do.call(grid.arrange, c(p[c(3,19,22)], list(ncol=3)))  # I need this do.call to take out the plots from p
 ```
 
 For some other cities, the predictions don't work that well. This can be because of unknown predictors that our model doesn't take into account, or other reasons! 
@@ -321,6 +339,7 @@ do.call(grid.arrange, c(p[c(19:25)], list(ncol=3)))
 
 Following comes my predictions for prices in next months. To verify these predictions, we can wait two more months and compare the results.
 ```{r echo=FALSE}
+# predicting november and december prices!
 data.estimated <- data.csv[c(1:11)]
 for (the_city in data.summary$city) {
   price.train = get.predictors(1:10)
@@ -340,6 +359,7 @@ While training the models, for each city I get 4 model coefficients. I assume th
 
 
 ```{r echo=FALSE}
+# clustering based on data coefficients
 data.coeffs <- data.frame(city=data.summary$city)
 for (the_city in data.summary$city) {
   price.train = get.predictors(1:10)
@@ -358,6 +378,7 @@ data.tabular$cluster <- factor(data.clusters$cluster)
 A simple model with *k=4* clusters have a goodness of `r round(data.clusters$betweenss / data.clusters$totss * 1000) / 10`%. The following figure illustrates the 25 cities on a map and each cluster is shown by a color.
 
 ```{r echo=FALSE}
+# plotting the cities using lat-lon based on clusters
 ggmap(mapgilbert) + geom_point(data=data.tabular, aes(x=lon, y=lat,fill=cluster), alpha=.8,size = 8, shape = 21) 
 
 ```
