@@ -1,7 +1,7 @@
 ---
 title: "Exploring a Price Index"
 author: "Bijan Ranjbar-Sahraei"
-date: "October 28, 2015"
+date: "October 28, 2015 - January 5, 2016"
 output:
   html_document:
     theme: united
@@ -10,7 +10,8 @@ output:
     toc: yes
 ---
 
-This is my first try to analyse a tHPI dataset. Therefore, some of the decisions and consequently their results seen in this report might not be perfect. Though, I'm continuously working on this report and will improve it iteratively. 
+Here is my mini-project on analysis of tHPI dataset. In the first try, late October 2015, The November and December prices were not determined yet, so I made predictions for them. Later, once the prices were anounced I compared my predictions with the final prices. Results were pretty okey, except the predictions of some cities such as Houston, Las Vegas and Denver for which prices had dropped further than expectations!  
+
 
 # Data Processing
 ```{r echo=FALSE, message=FALSE}
@@ -25,7 +26,7 @@ library("gridExtra")  # for having multiple subplots in a grid
 I start by importing a recent tHPI which shows the average price in USD for a standard double room, based on 25 of the most popular US cities. I also add the Latitude and Longitude of these 25 cities, which will be used for fancier visualizations. Here is the tHPI for top 6 cities of US.
 
 ```{r echo=FALSE}
-data.csv <- read.csv("/Users/bian/sandbox/thpi_us.csv")
+data.csv <- read.csv("/Users/bian/sandbox/thpi_us_verify.csv")
 data.tabular <- data.csv  # form now on I work with data.tabular and keep data.csv as the original version
 head(data.tabular)
 
@@ -37,6 +38,15 @@ data <- melt(data.tabular[,c(1:11)], id="city") # melts the matrix to a long lis
 data <- setNames(data[c("city", "variable", "value")], c("city", "month", "price"))  # changing the column names after melting them
 data$date <- as.Date(paste("01",data$month,"15",sep=""),"%d%B%Y")   # converting the month names to date
 head(data)
+tail(data)
+
+
+# for verification
+data_verify <- melt(data.tabular[,c(1:13)], id="city") # melts the matrix to a long list
+data_verify <- setNames(data_verify[c("city", "variable", "value")], c("city", "month", "price"))  # changing the column names after melting them
+data_verify$date <- as.Date(paste("01",data_verify$month,"15",sep=""),"%d%B%Y")   # converting the month names to date
+
+
 ```
 A few minor data processing tasks will be done later during the EDA and modeling phases. Next, I'll conduct *Exploratory Data Analysis (EDA)* for getting more insights into the dataset.
 
@@ -156,7 +166,10 @@ data.summary$lon <- sapply(data.summary$city,function(x) {as.numeric(data.tabula
 #ggplot(data=data.summary, aes(x=lon,y=lat,color=price.mean.class)) + geom_point(aes(shape=price.sd.class),size=4) + geom_text(aes(label=city),hjust=0, vjust=0) 
 ```
 
-The change of prices in each category are shown in following plots.
+The change of prices in each category are shown in following plots. 
+
+Fries: Cheap, Pizza: Moderate, Steak: Expensive
+Horse: Stable, Bull: Unstable
 
 ```{r echo=FALSE, warning=FALSE, message=FALSE}
 
@@ -174,29 +187,29 @@ data.summary$class.stability[data.summary$price.range > 100] <- "unstable"
 
 ggplot(subset(data,city %in% data.summary$city[data.summary$class.price == "cheap"]), aes(x=date,y=price,color=city)) +
   geom_point() + geom_smooth(se=FALSE) + 
-  ggtitle("Cheap Cities") + 
+  ggtitle("Fries Cities") + 
   scale_y_continuous(limits = c(90,500))
 
 ggplot(subset(data,city %in% data.summary$city[data.summary$class.price == "moderate"]), aes(x=date,y=price,color=city)) + 
   geom_point() + geom_smooth(se=FALSE) + 
-  ggtitle("Moderate Cities") + 
+  ggtitle("Pizza Cities") + 
   scale_y_continuous(limits = c(90,500))
 
 ggplot(subset(data,city %in% data.summary$city[data.summary$class.price == "expensive"]), aes(x=date,y=price,color=city)) + 
   geom_point() + geom_smooth(se=FALSE) + 
-  ggtitle("Expensive Cities") + 
+  ggtitle("Steak Cities") + 
   scale_y_continuous(limits = c(90,500))
 
 # plotting stable and unstable cities
 
 ggplot(subset(data,city %in% data.summary$city[data.summary$class.stability == "stable"]), aes(x=date,y=price,color=city)) + 
   geom_point() + geom_smooth(se=FALSE) + 
-  ggtitle("Stable Cities") + 
+  ggtitle("Horse Cities") + 
   scale_y_continuous(limits = c(90,500))
 
 ggplot(subset(data,city %in% data.summary$city[data.summary$class.stability == "unstable"]), aes(x=date,y=price,color=city)) + 
   geom_point() + geom_smooth(se=FALSE) + 
-  ggtitle("Unstable Cities") + 
+  ggtitle("Bull Cities") + 
   scale_y_continuous(limits = c(90,500))
 
 
@@ -313,19 +326,27 @@ do.call(grid.arrange, c(p[c(1,12,20,23)], list(ncol=2)))
 
 Overall, the predictions are not very bad; the trend of prices is usually followed by the model. Therefore, next, I use my model to predict the prices of November and December. 
 
-## Estimating November and December Prices (To be Verified)
+## Verification
 I use all available prices from January to October to train my model and then I make predictions for November and December prices. The predictions for all 25 US cities are illustrated in following (The black dots and lines show the real prices and red lines show the predictions).
 
 ```{r echo=FALSE}
 # plotting the predictions
 p <- lapply(data.summary$city,function(the_city) {
+  
+  # training
   price.train = get.predictors(1:10)
   price.train$y = data$price[data$city==the_city][1:10]
+  
+  # to verify
+  price.verify = get.predictors(1:12)
+  price.verify$y = data_verify$price[data_verify$city==the_city][1:12]
+  
+  # predictions
   price.trend = get.predictors(1:10)
   price.trend$y = data$price[data$city==the_city][1:10]
   price.prediction <- get.predictions(price.train,12)
   
-  ggplot(price.trend, aes(x=t,y=y)) + 
+  ggplot(price.verify, aes(x=t,y=y)) + 
       geom_point() + 
       geom_line(data=price.prediction, aes(x=t,y=y),color="red",size=1.4) + 
       geom_line() +
@@ -340,16 +361,16 @@ do.call(grid.arrange, c(p[c(19:25)], list(ncol=3)))
 Following comes my predictions for prices in next months. To verify these predictions, we can wait two more months and compare the results.
 ```{r echo=FALSE}
 # predicting november and december prices!
-data.estimated <- data.csv[c(1:11)]
+data.estimated <- data.csv[c(1:13)]
 for (the_city in data.summary$city) {
   price.train = get.predictors(1:10)
   price.train$y = data$price[data$city==the_city][1:10]
   price.prediction <- get.predictions(price.train,12)
-  data.estimated$November[data.tabular$city==the_city] <- round(price.prediction$y[11])
-  data.estimated$December[data.tabular$city==the_city] <- round(price.prediction$y[12])
+  data.estimated$November_aprox[data.tabular$city==the_city] <- round(price.prediction$y[11])
+  data.estimated$December_aprox[data.tabular$city==the_city] <- round(price.prediction$y[12])
 }
 
-data.estimated[c("city","November","December")]
+data.estimated[c("city","November", "November_aprox", "December", "December_aprox")]
 
 ```
 
