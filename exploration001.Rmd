@@ -358,7 +358,8 @@ do.call(grid.arrange, c(p[c(10:18)], list(ncol=3)))
 do.call(grid.arrange, c(p[c(19:25)], list(ncol=3)))
 ```
 
-Following comes my predictions for prices in next months. To verify these predictions, we can wait two more months and compare the results.
+Following comes my predictions for prices in next months which can be compared with the real prices shown next to them.
+
 ```{r echo=FALSE}
 # predicting november and december prices!
 data.estimated <- data.csv[c(1:13)]
