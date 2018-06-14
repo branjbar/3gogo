@@ -10,7 +10,7 @@ output:
     toc: yes
 ---
 
-Here is my mini-project on analysis of tHPI dataset. In the first try, late October 2015, The November and December prices were not determined yet, so I made predictions for them. Later, once the prices were anounced I compared my predictions with the final prices. Results were pretty okey, except the predictions of some cities such as Houston, Las Vegas and Denver for which prices had dropped further than expectations!  
+Here is my mini-project on analysis of trivago Hotel Price Index (tHPI) dataset. In the first try, late October 2015, The November and December prices were not determined yet, so I made predictions for them. Later, once the prices were anounced I compared my predictions with the final prices. Results were pretty okey, except the predictions of some cities such as Houston, Las Vegas and Denver for which prices had dropped further than expectations!  
 
 
 # Data Processing
